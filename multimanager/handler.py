@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
                 if a.get("base_url"): p = detect_provider(a["base_url"])
                 usage = fetch_account_usage(a)
                 enriched.append({**a, "_color": provider_color(p), "_prov": p, "_usage": usage})
-            self._json({"accounts": enriched, "active": active, "programs": PROGRAMS})
+            self._json({"accounts": enriched, "active": active, "programs": [dict(p) for p in PROGRAMS], "hide_uninstalled": cfg.get("hide_uninstalled", True)})
             return
 
         if u.path == "/api/skills":
@@ -165,9 +165,11 @@ class Handler(BaseHTTPRequestHandler):
             prog_mcp = scan_program_mcp()
             prog_skills = scan_all_skill_dirs()
             key_map = {a["id"]: a["name"] for a in cfg.get("accounts", [])}
+            hide_uninstalled = cfg.get("hide_uninstalled", True)
             list_data = []
             for p in PROGRAMS:
                 pid = p["id"]
+                if hide_uninstalled and not p.get("installed", True): continue
                 av = active.get(pid)
                 if isinstance(av, list):
                     active_names = [key_map.get(i) for i in av if key_map.get(i)]
@@ -182,6 +184,7 @@ class Handler(BaseHTTPRequestHandler):
                     "active_account": active_account,
                     "type": p["type"],
                     "multi_provider": p.get("multi_provider", False),
+                    "installed": p.get("installed", True),
                 })
             self._json({"programs": list_data}); return
 
@@ -467,6 +470,8 @@ class Handler(BaseHTTPRequestHandler):
             do_backup(cfg); self._json({"ok": True}); return
         if u.path == "/api/set-auto-backup":
             cfg["auto_backup"] = b.get("enabled", True); save_config(cfg); self._json({"ok": True}); return
+        if u.path == "/api/set-hide-uninstalled":
+            cfg["hide_uninstalled"] = b.get("enabled", True); save_config(cfg); self._json({"ok": True}); return
 
         # HISTORY
         if u.path == "/api/history-list":

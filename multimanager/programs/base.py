@@ -22,6 +22,9 @@ class Program:
         return [r] if r else []
     def fetch_usage(self, acc: dict) -> dict: ...
 
+    def is_installed(self) -> bool:
+        return self.config_path is not None and self.config_path.exists()
+
     def extra_files(self) -> list[dict]:
         return []
 
@@ -31,6 +34,7 @@ class Program:
             "config_path": str(self.config_path), "type": self.config_type,
             "skills_dir": str(self.skills_dir), "mcp_key": self.mcp_key,
             "multi_provider": self.multi_provider,
+            "installed": self.is_installed(),
             "extra_files": [{"name": f["name"], "desc": f.get("desc","")} for f in self.extra_files()],
         }
 

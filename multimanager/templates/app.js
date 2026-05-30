@@ -1,5 +1,5 @@
 
-let S = { accs: [], active: {}, sel: null, progs: [], lang: navigator.language.startsWith('ru') ? 'ru' : 'en' };
+let S = { accs: [], active: {}, sel: null, progs: [], lang: navigator.language.startsWith('ru') ? 'ru' : 'en', hideUninstalled: true };
 const PI = { 'claude-code': 'C', 'claude-desktop': 'D', 'codex': 'X', 'opencode': 'O', 'cline': 'L', 'roo-code': 'R' };
 
 const L = {
@@ -35,6 +35,7 @@ const L = {
     auto_import: 'Auto Import', from_file: 'From File...',
     history: 'History', version: 'version', versions: 'versions',
     diff: 'diff', vs_current: 'vs current', vs_previous: 'vs previous', close: 'Close',
+    hide_uninstalled: 'Hide uninstalled programs', not_installed: 'not installed',
   },
   ru: {
     accounts: 'Аккаунты', skills: 'Скиллы', mcp: 'MCP Серверы', programs: 'Программы', settings: 'Настройки',
@@ -68,6 +69,7 @@ const L = {
     auto_import: 'Авто-импорт', from_file: 'Из файла...',
     history: 'История', version: 'версия', versions: 'версий',
     diff: 'дифф', vs_current: 'с текущим', vs_previous: 'с предыдущей', close: 'Закрыть',
+    hide_uninstalled: 'Скрывать неустановленные программы', not_installed: 'не установлена',
   }
 };
 
@@ -92,7 +94,7 @@ async function deleteAcc() {
 }
 
 // ACCOUNTS
-async function loadAccs() { const d = await api('/api/accounts'); S.accs = d.accounts; S.active = d.active; S.progs = d.programs; renderAccs() }
+async function loadAccs() { const d = await api('/api/accounts'); S.accs = d.accounts; S.active = d.active; S.hideUninstalled = d.hide_uninstalled; S.progs = S.hideUninstalled ? d.programs.filter(p => p.installed) : d.programs; renderAccs() }
 function renderAccs() {
   const c = document.getElementById('acc-cards'); if (!S.accs.length) { c.innerHTML = '<div class="empty"><p>' + __('no_accounts') + '</p></div>'; return }
   const sorted = [...S.accs].sort((a, b) => a.name.localeCompare(b.name));
@@ -126,8 +128,9 @@ function renderProgs() {
   document.getElementById('no-sel').style.display = 'none'; document.getElementById('pcon').style.display = 'flex';
   const acc = S.accs.find(a => a.id === S.sel); if (!acc) return;
   const pgrid = document.getElementById('pgrid');
+  const visibleProgs = S.hideUninstalled ? S.progs.filter(p => p.installed) : S.progs;
   pgrid.innerHTML = '<div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:6px"><div style="font-size:12px;font-weight:500;color:var(--tx2)">' + __('apply_to') + '</div><div style="display:flex;gap:4px"><button class="b bs" onclick="allChk(true)">' + __('all') + '</button><button class="b bs" onclick="allChk(false)">' + __('none') + '</button><button class="b bs bp" onclick="applySel()">' + __('sync_all') + '</button></div></div>' +
-    S.progs.map(p => {
+    visibleProgs.map(p => {
       const activeIds = getActiveIds(p.id);
       const isActive = activeIds.includes(acc.id);
       const isMulti = p.multi_provider;
@@ -137,7 +140,8 @@ function renderProgs() {
       const otherActive = !isMulti && activeIds.length > 0 && !isActive
         ? (S.accs.find(a => a.id === activeIds[0])?.name || __('active'))
         : null;
-      return `<div class="pc ${isActive ? 'chk' : ''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id] || '?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div><div style="font-size:10px;color:var(--tx3)">${isMulti ? __('multi_provider') : __('single_provider')}</div></div><div class="pa" style="font-size:10px">${isActive ? '<span class="at" style="font-size:10px">' + __('active') + '</span>' : otherActive ? __('active') + ': ' + esc(otherActive) : '—'}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isActive ? 'checked' : ''}><span style="${isMulti ? 'color:var(--warn)' : 'color:var(--ok)'}">${action}</span></div></div>`
+      const notInstalled = !p.installed ? '<span class="ni-badge">' + __('not_installed') + '</span>' : '';
+      return `<div class="pc ${isActive ? 'chk' : ''} ${!p.installed ? 'ni' : ''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id] || '?'}</div><div><div class="pn" style="font-size:12px">${p.name} ${notInstalled}</div><div style="font-size:10px;color:var(--tx3)">${isMulti ? __('multi_provider') : __('single_provider')}</div></div><div class="pa" style="font-size:10px">${isActive ? '<span class="at" style="font-size:10px">' + __('active') + '</span>' : otherActive ? __('active') + ': ' + esc(otherActive) : '—'}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isActive ? 'checked' : ''}><span style="${isMulti ? 'color:var(--warn)' : 'color:var(--ok)'}">${action}</span></div></div>`
     }).join('')
 }
 function renderAccDetails() {
@@ -226,7 +230,11 @@ async function loadProgPage() { const d = await api('/api/programs'); renderProg
 function renderProgCards(progs) {
   const c = document.getElementById('prog-cards');
   const list = progs || S.progs || [];
-  c.innerHTML = list.map(p => `<div class="pc ${selProg === p.id ? 'chk' : ''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter || '?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account ? '\uD83D\uDC1A ' + p.active_account : '\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count || 0} skills</span><span>\uD83D\uDD17 ${p.mcp_count || 0} MCP</span><span>${p.type}</span>${p.multi_provider ? '<span style="color:var(--warn)">+multi</span>' : ''}</div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')
+  const vis = S.hideUninstalled ? list.filter(p => p.installed) : list;
+  c.innerHTML = vis.map(p => {
+    const ni = !p.installed ? '<span class="ni-badge">' + __('not_installed') + '</span>' : '';
+    return `<div class="pc ${selProg === p.id ? 'chk' : ''} ${!p.installed ? 'ni' : ''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter || '?'}</div><div><div class="pn">${p.name} ${ni}</div><div class="pa" style="margin:0">${p.active_account ? '\uD83D\uDC1A ' + p.active_account : '\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count || 0} skills</span><span>\uD83D\uDD17 ${p.mcp_count || 0} MCP</span><span>${p.type}</span>${p.multi_provider ? '<span style="color:var(--warn)">+multi</span>' : ''}</div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`
+  }).join('')
 }
 function openFolder(path) { api('/api/open-folder', { path }) }
 
@@ -374,7 +382,8 @@ async function addMcp() {
 async function loadSet() {
   const c = document.getElementById('set-con'); const cfg = await api('/api/get-settings');
   const hLabel = cfg.auto_backup !== false ? __('versions_saved') : '';
-  c.innerHTML = `<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">${__('auto_backup')}</div><div style="font-size:11px;color:var(--tx3)">${__('before_changes')}</div></div><input type="checkbox" ${cfg.auto_backup !== false ? 'checked' : ''} onchange="api('/api/set-auto-backup',{enabled:this.checked})"></div></div>
+  c.innerHTML = `<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">${__('auto_backup')}</div><div style="font-size:11px;color:var(--tx3)">${__('before_changes')}</div></div><input type="checkbox" ${cfg.auto_backup !== false ? 'checked' : ''} onchange="api('/api/set-auto-backup',{enabled:this.checked})"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd)"><div><div style="font-size:13px">${__('hide_uninstalled')}</div></div><input type="checkbox" ${cfg.hide_uninstalled !== false ? 'checked' : ''} onchange="api('/api/set-hide-uninstalled',{enabled:this.checked});S.hideUninstalled=this.checked;renderProgs();renderProgCards()"></div></div></div></div>
 <div style="display:flex;gap:8px;margin-bottom:16px"><button class="b" onclick="doBackupNow()">${__('backup_now')}</button><button class="b" onclick="snapshotNow()">${__('snapshot')}</button><button class="b bd" onclick="doShutdown()">${__('shutdown')}</button></div>
 <details style="margin-bottom:16px"><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${__('history')} (${hLabel})</summary><div id="hist-list" style="max-height:300px;overflow:auto">${__('loading') || 'Loading...'}</div></details>
 <details><summary style="cursor:pointer;color:var(--tx2);font-size:12px;margin-bottom:8px">${__('raw_config')}</summary><pre style="background:var(--card);padding:12px;border-radius:var(--r);font-size:11px;overflow:auto;max-height:300px;color:var(--tx2)">${JSON.stringify(cfg, null, 2)}</pre></details>`;

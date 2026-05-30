@@ -64,6 +64,7 @@ DEFAULT_CONFIG = {
     "accounts": [],
     "auto_backup": True,
     "custom_skill_roots": [],
+    "hide_uninstalled": True,
 }
 
 

@@ -73,7 +73,8 @@ def import_from_cline_roo(cfg, accounts, existing_keys, existing_urls):
     """Import Cline / Roo Code configs as accounts."""
     imported = []
     for prog in ("cline", "roo-code"):
-        cp = PROGRAMS[3] if prog == "cline" else PROGRAMS[4]  # index in PROGRAMS list
+        cp = next((p for p in PROGRAMS if p["id"] == prog), None)
+        if not cp: continue
         p = Path(cp["config_path"])
         if not p.exists():
             continue
@@ -344,7 +345,8 @@ def detect_active_accounts():
 
     # Cline / Roo Code — check if their configs use matching keys
     for prog_id in ("cline", "roo-code"):
-        cp = PROGRAMS[3] if prog_id == "cline" else PROGRAMS[4]
+        cp = next((p for p in PROGRAMS if p["id"] == prog_id), None)
+        if not cp: continue
         p = Path(cp["config_path"])
         if not p.exists():
             continue

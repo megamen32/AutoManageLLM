@@ -57,6 +57,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
 .pc .pa .at{color:var(--ok);font-weight:500}
 .pc .pc2{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);margin-top:6px}
 .pc .pc2 input{accent-color:var(--acc)}
+.pc.ni{opacity:.5;border-color:var(--brd2);background:var(--sbg)}
+.ni-badge{display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;background:rgba(136,136,136,.15);color:var(--tx3);margin-left:4px}
 
 /* PROGRAMS SPLIT LAYOUT */
 #prog-detail.on{display:flex;flex-direction:column}.pd-split{display:flex;flex:1;min-height:0;gap:0;border:1px solid var(--brd);border-radius:var(--rl);overflow:hidden}
