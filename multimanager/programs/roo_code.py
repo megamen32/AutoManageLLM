@@ -13,6 +13,9 @@ class RooCodeProgram:
     skills_dir = Path.home() / ".roo" / "skills"
     mcp_key = "mcpServers"
 
+    def extra_files(self):
+        return []
+
     def _extract_key(self, data):
         seen, api_key, base_url = set(), "", ""
         for sdata in (data.get("mcpServers") or {}).values():

@@ -14,6 +14,9 @@ class ClaudeCodeProgram:
     skills_dir = Path.home() / ".claude" / "skills"
     mcp_key = "mcpServers"
 
+    def extra_files(self):
+        return []
+
     def read_config(self) -> dict:
         if not CC_SETTINGS.exists(): return {}
         try: return json.loads(CC_SETTINGS.read_text())

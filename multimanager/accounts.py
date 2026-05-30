@@ -229,14 +229,17 @@ def import_accounts():
             opts = pdata.get("options", {})
             key = opts.get("apiKey", "")
             url = opts.get("baseUrl", "")
-            if key and key[:20] not in existing_keys and url.rstrip("/") not in existing_urls:
-                n = f"OpenCode ({pname})"
-                accounts.append({
-                    "id": uuid.uuid4().hex[:8], "name": n, "provider": "openai",
-                    "api_key": key, "base_url": url, "model": "",
-                    "source_path": str(OPENCODE_CFG),
-                })
-                imported.append(n)
+            if key and key[:20] in existing_keys: continue
+            if url and url.rstrip("/") in existing_urls: continue
+            prov_type = detect_provider(url) if url else "openai"
+            n = f"OpenCode ({pname})"
+            accounts.append({
+                "id": uuid.uuid4().hex[:8], "name": n, "provider": prov_type,
+                "api_key": key, "base_url": url, "model": "",
+                "source_path": str(OPENCODE_CFG),
+                "opencode_provider_id": pname,
+            })
+            imported.append(n)
 
     # Claude Desktop OAuth credentials
     imported += import_from_claude_desktop(cfg, accounts, existing_keys, existing_urls)
@@ -307,18 +310,23 @@ def detect_active_accounts():
 
     # OpenCode
     oc = _read_json(OPENCODE_CFG)
-    for pname, pdata in (oc.get("provider") or {}).items():
-        if isinstance(pdata, dict):
+    ocp = oc.get("provider") or {}
+    provider_names = set(ocp.keys())
+    opencode_ids = []
+    for acc in accounts:
+        pid = acc.get("opencode_provider_id", "")
+        if pid in provider_names:
+            opencode_ids.append(acc["id"])
+            continue
+        key = acc.get("api_key", "")
+        if not key: continue
+        for pname, pdata in ocp.items():
+            if not isinstance(pdata, dict): continue
             opts = pdata.get("options", {})
-            oc_key = opts.get("apiKey", "")
-            oc_url = opts.get("baseUrl", "")
-            best = None; best_score = 0
-            for acc in accounts:
-                score = 0
-                if acc.get("api_key") and oc_key and acc["api_key"][:20] == oc_key[:20]: score += 3
-                if acc.get("base_url") and oc_url and acc["base_url"] in oc_url: score += 2
-                if score > best_score: best_score = score; best = acc
-            result["opencode"] = best["id"] if best and best_score >= 2 else None
+            if opts.get("apiKey", "")[:20] == key[:20]:
+                opencode_ids.append(acc["id"])
+                break
+    result["opencode"] = opencode_ids
 
     # Claude Desktop
     if ANTHROPIC_ACTIVE_CONFIG.exists():
@@ -374,6 +382,17 @@ def detect_active_accounts():
     return result
 
 
+def _make_oc_provider_id(acc):
+    base = acc.get("name", "provider").lower().replace(" ", "-").replace("(", "").replace(")", "")
+    pid = base
+    n = 1
+    seen = set()
+    while pid in seen or (n > 1 and pid == base):
+        pid = f"{base}-{n}" if n > 1 else base
+        n += 1
+    return pid
+
+
 def apply_account(acc_id, program_id):
     cfg = ensure_defaults()
     acc = next((a for a in cfg.get("accounts", []) if a["id"] == acc_id), None)
@@ -424,12 +443,31 @@ def apply_account(acc_id, program_id):
         prov = oc.setdefault("provider", {})
         base_url = acc.get("base_url", "")
         api_key = acc.get("api_key", "")
-        if "z.ai" in base_url or "zai" in acc.get("provider", ""):
-            zai = prov.setdefault("zai-coding-plan", {})
-            opts = zai.setdefault("options", {})
-            if api_key: opts["apiKey"] = api_key
-            if base_url: opts["baseUrl"] = base_url
+        prov_id = acc.get("opencode_provider_id") or _make_oc_provider_id(acc)
+        entry = prov.setdefault(prov_id, {})
+        opts = entry.setdefault("options", {})
+        if api_key: opts["apiKey"] = api_key
+        if base_url: opts["baseUrl"] = base_url
         _write_json(OPENCODE_CFG, oc)
-        return True, f"OpenCode: {acc['name']}"
+        return True, f"OpenCode: {prov_id}"
 
     return False, f"{program_id}: not implemented"
+
+
+def remove_account_from_program(acc_id, program_id):
+    cfg = ensure_defaults()
+    acc = next((a for a in cfg.get("accounts", []) if a["id"] == acc_id), None)
+    if not acc: return False, "Account not found"
+    do_backup(cfg)
+
+    if program_id == "opencode":
+        oc = _read_json(OPENCODE_CFG)
+        prov = oc.get("provider", {})
+        prov_id = acc.get("opencode_provider_id", "")
+        if prov_id in prov:
+            del prov[prov_id]
+            _write_json(OPENCODE_CFG, oc)
+            return True, f"Removed {prov_id} from OpenCode"
+        return False, f"Provider {prov_id} not found in OpenCode"
+
+    return False, f"remove from {program_id}: not supported"

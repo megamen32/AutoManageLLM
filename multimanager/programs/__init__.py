@@ -26,7 +26,8 @@ def all_dicts():
     for p in all():
         d = {"id": p.id, "name": p.name, "letter": p.letter,
              "config_path": str(p.config_path), "type": p.config_type,
-             "skills_dir": str(p.skills_dir), "mcp_key": p.mcp_key}
+             "skills_dir": str(p.skills_dir), "mcp_key": p.mcp_key,
+             "multi_provider": getattr(p, "multi_provider", False)}
         try:
             ef = p.extra_files()
             d["extra_files"] = [{"name": f["name"], "path": f.get("path", ""), "desc": f.get("desc", "")} for f in ef]

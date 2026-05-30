@@ -218,3 +218,141 @@ def test_diff_decode_leaves_toml_alone():
     content = 'model = "gpt-4"\nexp = 1700000000\n'
     result = _decode_diff_content(content, "config.toml")
     assert result == content
+
+
+# ─── OpenCode multi-provider tests ──────────────────────────────────
+
+def test_opencode_multi_provider_flag():
+    from multimanager.programs.opencode import OpenCodeProgram
+    p = OpenCodeProgram()
+    assert p.multi_provider is True
+
+
+def test_opencode_import_all_providers(tmp_env):
+    """Import should import ALL providers from opencode.json (not just zai)."""
+    import json
+    oc = tmp_env["cfg_dir"].parent / ".config" / "opencode" / "opencode.json"
+    oc.parent.mkdir(parents=True, exist_ok=True)
+    oc.write_text(json.dumps({
+        "provider": {
+            "zai-coding-plan": {
+                "options": {"apiKey": "zai_key_abc123", "baseURL": "https://api.z.ai/v1"}
+            },
+            "my-openai": {
+                "options": {"apiKey": "sk-openai-xyz789", "baseURL": "https://api.openai.com/v1"}
+            },
+            "no-key-provider": {
+                "options": {"baseURL": "https://example.com"}
+            },
+        }
+    }))
+
+    from multimanager.accounts import import_accounts
+    result = import_accounts()
+
+    accs = _read_accounts(tmp_env["cfg_file"])
+    opencode_accs = [a for a in accs if a.get("opencode_provider_id")]
+    assert len(opencode_accs) == 3, f"Expected 3 providers, got {len(opencode_accs)}"
+    providers = {a["opencode_provider_id"] for a in opencode_accs}
+    assert "zai-coding-plan" in providers
+    assert "my-openai" in providers
+    assert "no-key-provider" in providers
+
+
+def test_opencode_apply_generic(tmp_env):
+    """apply_account should write ANY provider (not just zai)."""
+    import json
+    oc_path = tmp_env["cfg_dir"].parent / ".config" / "opencode" / "opencode.json"
+    oc_path.parent.mkdir(parents=True, exist_ok=True)
+    oc_path.write_text(json.dumps({"provider": {}}))
+
+    # Create an account with opencode_provider_id
+    cfg_file = tmp_env["cfg_file"]
+    cfg = json.loads(cfg_file.read_text())
+    cfg["accounts"].append({
+        "id": "test-acc-1",
+        "name": "My OpenAI",
+        "provider": "openai",
+        "api_key": "sk-openai-xyz789",
+        "base_url": "https://api.openai.com/v1",
+        "opencode_provider_id": "my-openai",
+    })
+    cfg_file.write_text(json.dumps(cfg))
+
+    from multimanager.accounts import apply_account
+    ok, msg = apply_account("test-acc-1", "opencode")
+    assert ok, f"apply_account failed: {msg}"
+
+    oc = json.loads(oc_path.read_text())
+    assert "my-openai" in oc.get("provider", {})
+    assert oc["provider"]["my-openai"]["options"]["apiKey"] == "sk-openai-xyz789"
+
+
+def test_opencode_remove_from_program(tmp_env):
+    """remove_account_from_program should delete provider from opencode.json."""
+    import json
+    oc_path = tmp_env["cfg_dir"].parent / ".config" / "opencode" / "opencode.json"
+    oc_path.parent.mkdir(parents=True, exist_ok=True)
+    oc_path.write_text(json.dumps({
+        "provider": {
+            "my-openai": {
+                "options": {"apiKey": "sk-abc", "baseURL": "https://api.openai.com/v1"}
+            }
+        }
+    }))
+
+    cfg_file = tmp_env["cfg_file"]
+    cfg = json.loads(cfg_file.read_text())
+    cfg["accounts"].append({
+        "id": "test-acc-1",
+        "name": "My OpenAI",
+        "provider": "openai",
+        "api_key": "sk-abc",
+        "opencode_provider_id": "my-openai",
+    })
+    cfg_file.write_text(json.dumps(cfg))
+
+    from multimanager.accounts import remove_account_from_program
+    ok, msg = remove_account_from_program("test-acc-1", "opencode")
+    assert ok, f"remove failed: {msg}"
+
+    oc = json.loads(oc_path.read_text())
+    assert "my-openai" not in oc.get("provider", {})
+
+
+def test_opencode_detect_all_active(tmp_env):
+    """detect_active_accounts should return list for OpenCode."""
+    import json
+    oc_path = tmp_env["cfg_dir"].parent / ".config" / "opencode" / "opencode.json"
+    oc_path.parent.mkdir(parents=True, exist_ok=True)
+    oc_path.write_text(json.dumps({
+        "provider": {
+            "prov-a": {"options": {"apiKey": "key-aaa"}},
+            "prov-b": {"options": {"apiKey": "key-bbb"}},
+        }
+    }))
+
+    cfg_file = tmp_env["cfg_file"]
+    cfg = json.loads(cfg_file.read_text())
+    cfg["accounts"] = [
+        {"id": "id-a", "name": "A", "api_key": "key-aaa", "opencode_provider_id": "prov-a"},
+        {"id": "id-b", "name": "B", "api_key": "key-bbb", "opencode_provider_id": "prov-b"},
+        {"id": "id-c", "name": "C", "api_key": "key-ccc"},
+    ]
+    cfg_file.write_text(json.dumps(cfg))
+
+    from multimanager.accounts import detect_active_accounts
+    result = detect_active_accounts()
+    oc_active = result.get("opencode", [])
+    assert isinstance(oc_active, list), f"Expected list, got {type(oc_active)}"
+    assert len(oc_active) == 2, f"Expected 2 active, got {len(oc_active)}: {oc_active}"
+    assert "id-a" in oc_active
+    assert "id-b" in oc_active
+    assert "id-c" not in oc_active
+
+
+def test_make_oc_provider_id(tmp_env):
+    from multimanager.accounts import _make_oc_provider_id
+    assert _make_oc_provider_id({"name": "My OpenAI Key"}) == "my-openai-key"
+    assert _make_oc_provider_id({"name": "Test (custom)"}) == "test-custom"
+    assert _make_oc_provider_id({"name": "Z.AI (GLM)"}) == "z.ai-glm"

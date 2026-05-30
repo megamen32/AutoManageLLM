@@ -10,12 +10,16 @@ class Program:
     config_type: str = "json"
     skills_dir: Path = None
     mcp_key: str = "mcpServers"
+    multi_provider: bool = False
 
     def read_config(self) -> dict: ...
     def write_config(self, data: dict): ...
     def import_accounts(self, accounts: list, existing_keys: set, existing_urls: set) -> list: ...
     def apply_account(self, acc: dict, current_config: dict = None) -> tuple: ...
     def detect_active(self, accounts: list) -> str | None: ...
+    def detect_all_active(self, accounts: list) -> list[str]:
+        r = self.detect_active(accounts)
+        return [r] if r else []
     def fetch_usage(self, acc: dict) -> dict: ...
 
     def extra_files(self) -> list[dict]:
@@ -26,6 +30,7 @@ class Program:
             "id": self.id, "name": self.name, "letter": self.letter,
             "config_path": str(self.config_path), "type": self.config_type,
             "skills_dir": str(self.skills_dir), "mcp_key": self.mcp_key,
+            "multi_provider": self.multi_provider,
             "extra_files": [{"name": f["name"], "desc": f.get("desc","")} for f in self.extra_files()],
         }
 

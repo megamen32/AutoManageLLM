@@ -13,6 +13,9 @@ class ClineProgram:
     skills_dir = Path.home() / ".cline" / "skills"
     mcp_key = "mcpServers"
 
+    def extra_files(self):
+        return []
+
     def _extract_key(self, data):
         seen, api_key, base_url = set(), "", ""
         for sdata in (data.get("mcpServers") or {}).values():

@@ -20,6 +20,8 @@ const L = {
     name_required: 'Name required', nothing_selected: 'Nothing selected', synced: 'synced', errors: 'errors',
     enter_folder: 'Enter folder path:', new_name: 'New name:', delete_confirm: 'Delete this account?',
     select_programs: 'Select programs',
+    add_to: 'Add to', remove_from: 'Remove from', replace_with: 'Replace with',
+    multi_provider: 'multi-provider', single_provider: 'single-provider',
     default_model: 'default', active: 'Active', left: 'left', expired: 'expired', h: 'h',
     config: 'Config', file: 'File', provider: 'Provider', email: 'Email', plan: 'Plan',
     api_key: 'API Key', source: 'Source', token_expires: 'Token expires',
@@ -51,6 +53,8 @@ const L = {
     name_required: 'Имя обязательно', nothing_selected: 'Ничего не выбрано', synced: 'синхр.', errors: 'ошибок',
     enter_folder: 'Путь к папке:', new_name: 'Новое имя:', delete_confirm: 'Удалить этот аккаунт?',
     select_programs: 'Выберите программы',
+    add_to: 'Добавить в', remove_from: 'Убрать из', replace_with: 'Заменить на',
+    multi_provider: 'мульти-провайдер', single_provider: 'один провайдер',
     default_model: 'по умолч.', active: 'Активен', left: 'осталось', expired: 'истёк', h: 'ч',
     config: 'Конфиг', file: 'Файл', provider: 'Провайдер', email: 'Email', plan: 'План',
     api_key: 'API Key', source: 'Источник', token_expires: 'Токен истекает',
@@ -112,15 +116,28 @@ function usageBarHtml(u) {
 }
 async function refreshUsage() { await api('/api/usage-refresh', {}); loadAccs(); toast(__('usage_refreshed'), 'ok') }
 
+function getActiveIds(pid) {
+  const v = S.active[pid];
+  return Array.isArray(v) ? v : (v ? [v] : []);
+}
+
 function selAcc(id) { S.sel = id; renderAccs(); renderProgs(); renderAccDetails() }
 function renderProgs() {
   document.getElementById('no-sel').style.display = 'none'; document.getElementById('pcon').style.display = 'flex';
   const acc = S.accs.find(a => a.id === S.sel); if (!acc) return;
   const pgrid = document.getElementById('pgrid');
-  pgrid.innerHTML = '<div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:6px"><div style="font-size:12px;font-weight:500;color:var(--tx2)" title="' + __('write_account') + '">' + __('apply_to') + ' <span style="font-size:10px;color:var(--tx3);font-weight:400">' + __('write_account') + '</span></div><div style="display:flex;gap:4px"><button class="b bs" onclick="allChk(true)">' + __('all') + '</button><button class="b bs" onclick="allChk(false)">' + __('none') + '</button><button class="b bs bp" onclick="applySel()">' + __('sync_all') + '</button></div></div>' +
+  pgrid.innerHTML = '<div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:4px 0;gap:6px"><div style="font-size:12px;font-weight:500;color:var(--tx2)">' + __('apply_to') + '</div><div style="display:flex;gap:4px"><button class="b bs" onclick="allChk(true)">' + __('all') + '</button><button class="b bs" onclick="allChk(false)">' + __('none') + '</button><button class="b bs bp" onclick="applySel()">' + __('sync_all') + '</button></div></div>' +
     S.progs.map(p => {
-      const aid = S.active[p.id]; const isMe = aid === acc.id; const who = isMe ? '<span class="at" style="font-size:10px">' + __('active') + '</span>' : aid ? S.accs.find(a => a.id === aid)?.name || aid : '—';
-      return `<div class="pc ${isMe ? 'chk' : ''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id] || '?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div></div><div class="pa" style="font-size:10px">${who}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isMe ? 'checked' : ''}><span>${__('apply')}</span></div></div>`
+      const activeIds = getActiveIds(p.id);
+      const isActive = activeIds.includes(acc.id);
+      const isMulti = p.multi_provider;
+      const action = isMulti
+        ? (isActive ? __('remove_from') : __('add_to'))
+        : __('replace_with');
+      const otherActive = !isMulti && activeIds.length > 0 && !isActive
+        ? (S.accs.find(a => a.id === activeIds[0])?.name || __('active'))
+        : null;
+      return `<div class="pc ${isActive ? 'chk' : ''}" onclick="tglChk(this)" style="padding:8px 10px"><div class="pt2" style="gap:6px"><div class="pi" style="width:24px;height:24px;font-size:11px">${PI[p.id] || '?'}</div><div><div class="pn" style="font-size:12px">${p.name}</div><div style="font-size:10px;color:var(--tx3)">${isMulti ? __('multi_provider') : __('single_provider')}</div></div><div class="pa" style="font-size:10px">${isActive ? '<span class="at" style="font-size:10px">' + __('active') + '</span>' : otherActive ? __('active') + ': ' + esc(otherActive) : '—'}</div></div><div class="pc2" style="margin-top:4px;gap:4px;font-size:10px"><input type="checkbox" value="${p.id}" ${isActive ? 'checked' : ''}><span style="${isMulti ? 'color:var(--warn)' : 'color:var(--ok)'}">${action}</span></div></div>`
     }).join('')
 }
 function renderAccDetails() {
@@ -131,7 +148,8 @@ function renderAccDetails() {
   const parts = [];
   if ('codex_provider' in acc) parts.push('import: Codex' + (acc.codex_provider ? ' (' + acc.codex_provider + ')' : ''));
   if ('claude_oauth_cred' in acc) parts.push('import: Claude Desktop OAuth (' + acc.claude_oauth_cred + ')');
-  if (!('codex_provider' in acc) && !('claude_oauth_cred' in acc)) parts.push('import: manual');
+  if (acc.opencode_provider_id) parts.push('OpenCode ID: ' + acc.opencode_provider_id);
+  if (!('codex_provider' in acc) && !('claude_oauth_cred' in acc) && !acc.opencode_provider_id) parts.push('import: manual');
   parts.push('token: ' + (acc.claude_oauth_cred ? 'OAuth (JWT)' : acc.api_key && acc.api_key.startsWith('sk-') ? 'API Key (sk-)' : acc.api_key && acc.api_key.startsWith('sk-ant-') ? 'API Key (Anthropic)' : acc.api_key ? 'API Key (custom)' : 'Codex (ChatGPT OAuth)'));
   const keyMask = acc.api_key && !acc.claude_oauth_cred ? acc.api_key.slice(0, 8) + '...' + acc.api_key.slice(-4) : '—';
   const rows = [
@@ -154,9 +172,35 @@ function tglChk(c) { const cb = c.querySelector('input[type=checkbox]'); cb.chec
 function allChk(v) { document.querySelectorAll('#pgrid input[type=checkbox]').forEach(cb => { cb.checked = v; cb.closest('.pc').classList.toggle('chk', v) }) }
 
 async function applySel() {
-  if (!S.sel) return; const pids = [...document.querySelectorAll('#pgrid input:checked')].map(c => c.value); if (!pids.length) { toast(__('select_programs')); return }
-  const r = await api('/api/apply', { account_id: S.sel, programs: pids });
-  r.results?.forEach(x => toast(x.message, x.ok ? 'ok' : 'er')); loadAccs()
+  if (!S.sel) return;
+  const acc = S.accs.find(a => a.id === S.sel);
+  if (!acc) return;
+  const allChecks = document.querySelectorAll('#pgrid input[type=checkbox]');
+  const toApply = [];
+  const toRemove = [];
+  allChecks.forEach(cb => {
+    const pid = cb.value;
+    const prog = S.progs.find(p => p.id === pid);
+    const isMulti = prog && prog.multi_provider;
+    const activeIds = getActiveIds(pid);
+    const isActive = activeIds.includes(acc.id);
+    if (cb.checked) {
+      if (isMulti && !isActive) toApply.push(pid);
+      else if (!isMulti) toApply.push(pid);
+    } else {
+      if (isMulti && isActive) toRemove.push(pid);
+    }
+  });
+  if (!toApply.length && !toRemove.length) { toast(__('nothing_selected')); return }
+  if (toApply.length) {
+    const r = await api('/api/apply', { account_id: S.sel, programs: toApply });
+    (r.results || []).forEach(x => toast(x.message, x.ok ? 'ok' : 'er'))
+  }
+  for (const pid of toRemove) {
+    const r = await api('/api/account-remove-from-program', { account_id: S.sel, program: pid });
+    toast(r.message, r.ok ? 'ok' : 'er')
+  }
+  loadAccs()
 }
 
 async function doImport() { const r = await api('/api/import'); toast(__('imported', r.imported?.join(', ') || 'none'), r.imported?.length ? 'ok' : ''); loadAccs() }
@@ -182,7 +226,7 @@ async function loadProgPage() { const d = await api('/api/programs'); renderProg
 function renderProgCards(progs) {
   const c = document.getElementById('prog-cards');
   const list = progs || S.progs || [];
-  c.innerHTML = list.map(p => `<div class="pc ${selProg === p.id ? 'chk' : ''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter || '?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account ? '\uD83D\uDC1A ' + p.active_account : '\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count || 0} skills</span><span>\uD83D\uDD17 ${p.mcp_count || 0} MCP</span><span>${p.type}</span></div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')
+  c.innerHTML = list.map(p => `<div class="pc ${selProg === p.id ? 'chk' : ''}" onclick="showProg('${p.id}')"><div class="pt2"><div class="pi">${p.letter || '?'}</div><div><div class="pn">${p.name}</div><div class="pa" style="margin:0">${p.active_account ? '\uD83D\uDC1A ' + p.active_account : '\u2014'}</div></div></div><div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--tx3)"><span>\uD83D\uDCE6 ${p.skills_count || 0} skills</span><span>\uD83D\uDD17 ${p.mcp_count || 0} MCP</span><span>${p.type}</span>${p.multi_provider ? '<span style="color:var(--warn)">+multi</span>' : ''}</div><div style="font-size:10px;color:var(--tx3);margin-top:4px;word-break:break-all">${p.config_path}</div></div>`).join('')
 }
 function openFolder(path) { api('/api/open-folder', { path }) }
 

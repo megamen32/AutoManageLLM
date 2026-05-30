@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .settings import get_programs, provider_color, detect_provider, MASTER_SKILLS, MASTER_MCP, PROGRAMS
 from .config import ensure_defaults, save_config, do_backup
-from .accounts import import_accounts, detect_active_accounts, apply_account
+from .accounts import import_accounts, detect_active_accounts, apply_account, remove_account_from_program
 from .usage import fetch_account_usage, _USAGE_CACHE
 from .skills import scan_master_skills, scan_all_skill_dirs, sync_skill_to_programs, sync_all_skills, collect_skill_to_master, delete_skill_from_master
 from .mcp_ import scan_master_mcp, save_master_mcp, scan_program_mcp, sync_mcp_to_programs, delete_mcp_from_program
@@ -168,13 +168,20 @@ class Handler(BaseHTTPRequestHandler):
             list_data = []
             for p in PROGRAMS:
                 pid = p["id"]
+                av = active.get(pid)
+                if isinstance(av, list):
+                    active_names = [key_map.get(i) for i in av if key_map.get(i)]
+                    active_account = ", ".join(active_names) if active_names else None
+                else:
+                    active_account = key_map.get(av, None)
                 list_data.append({
                     "id": pid, "name": p["name"], "letter": p["letter"],
                     "config_path": p["config_path"],
                     "skills_count": len(prog_skills.get(pid, [])),
                     "mcp_count": len(prog_mcp.get(pid, {})),
-                    "active_account": key_map.get(active.get(pid), None),
+                    "active_account": active_account,
                     "type": p["type"],
+                    "multi_provider": p.get("multi_provider", False),
                 })
             self._json({"programs": list_data}); return
 
@@ -348,6 +355,11 @@ class Handler(BaseHTTPRequestHandler):
                 ok, msg = apply_account(aid, pid)
                 results.append({"program": pid, "ok": ok, "message": msg})
             self._json({"results": results}); return
+        if u.path == "/api/account-remove-from-program":
+            aid = b.get("account_id", ""); pid = b.get("program", "")
+            if not aid or not pid: return self._err("account_id and program required")
+            ok, msg = remove_account_from_program(aid, pid)
+            self._json({"ok": ok, "message": msg}); return
 
         # SKILLS
         if u.path == "/api/skill-sync":
