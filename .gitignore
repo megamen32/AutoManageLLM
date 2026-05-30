@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.bak
+*.v2-backup
+.DS_Store
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+.pytest_cache/
+uv.lock
