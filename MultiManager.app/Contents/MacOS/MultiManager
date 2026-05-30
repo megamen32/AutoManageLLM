@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # MultiManager .app launcher (uv venv)
-DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
-VENV="$DIR/MultiManager/.venv"
+DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+VENV="$DIR/.venv"
 if [ -f "$VENV/bin/activate" ]; then
     source "$VENV/bin/activate"
 else
-    export PYTHONPATH="$DIR/MultiManager:$PYTHONPATH"
+    export PYTHONPATH="$DIR:$PYTHONPATH"
 fi
-cd "$DIR/MultiManager" && exec python3 app.py
+cd "$DIR" && exec python3 app.py
