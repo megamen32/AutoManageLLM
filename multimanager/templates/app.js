@@ -76,7 +76,7 @@ const L = {
 function __(k, ...a) { let s = (L[S.lang] || L.en)[k]; if (s === void 0) s = k; a.forEach((v, i) => s = s.replace(new RegExp('\\{' + i + '\\}', 'g'), v)); return s }
 
 function applyLang() { document.querySelectorAll('[data-l]').forEach(el => { const k = el.dataset.l; const v = __(k); if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = v; else el.innerHTML = v }) }
-function setLang(l) { S.lang = l; document.getElementById('lang-sw').value = l; applyLang() }
+function setLang(l) { S.lang = l; document.getElementById('lang-sw').value = l; localStorage.setItem('mm_lang', l); applyLang() }
 
 function go(p) { document.querySelectorAll('.pg').forEach(e => e.classList.remove('on')); document.getElementById('pg-' + p).classList.add('on'); document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.p === p)); if (p === 'skills') loadSkills(); if (p === 'mcp') loadMcp(); if (p === 'set') loadSet(); if (p === 'progs') loadProgPage() }
 function toast(m, t = '') { const e = document.createElement('div'); e.className = 'toast ' + (t === 'ok' ? 'ok' : t === 'er' ? 'er' : ''); e.textContent = m; document.getElementById('tc').appendChild(e); setTimeout(() => e.remove(), 4000) }
@@ -411,6 +411,8 @@ async function doBackupNow() { const r = await api('/api/backup-now', {}); if (r
 async function doShutdown() { await api('/api/shutdown'); toast(__('shutting_down')); setTimeout(() => location.reload(), 1500) }
 
 // INIT
+const saved = localStorage.getItem('mm_lang');
+if (saved) S.lang = saved;
 document.getElementById('lang-sw').value = S.lang
 applyLang()
 loadAccs().then(() => { if (!S.accs.length) doImport() });
